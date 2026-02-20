@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SecretDrop</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      margin: 0;
+      padding: 1rem;
+      min-height: 100vh;
+      background: #1a1a2e;
+      color: #eee;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 1.5rem; }
+    .card {
+      width: 100%;
+      max-width: 420px;
+      padding: 1.5rem;
+      background: #16213e;
+      border-radius: 12px;
+    }
+    label { display: block; margin-bottom: 0.25rem; font-size: 0.9rem; color: #aaa; }
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 0.75rem;
+      border: 1px solid #333;
+      border-radius: 8px;
+      background: #0f0f1a;
+      color: #eee;
+      font-size: 1rem;
+      resize: vertical;
+      margin-bottom: 1rem;
+    }
+    select {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid #333;
+      border-radius: 8px;
+      background: #0f0f1a;
+      color: #eee;
+      font-size: 1rem;
+      margin-bottom: 1rem;
+    }
+    button {
+      width: 100%;
+      padding: 0.9rem;
+      border: none;
+      border-radius: 8px;
+      background: #e94560;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .result { text-align: center; }
+    .result .drop-id {
+      font-family: ui-monospace, monospace;
+      font-size: 1.1rem;
+      word-break: break-all;
+      padding: 1rem;
+      background: #0f0f1a;
+      border-radius: 8px;
+      margin: 1rem 0;
+      user-select: all;
+      cursor: pointer;
+    }
+    .result .expires { font-size: 0.9rem; color: #888; margin-top: 0.5rem; }
+    .result .hint { font-size: 0.85rem; color: #666; margin-top: 0.25rem; }
+    .error { color: #e94560; font-size: 0.9rem; margin-top: 0.5rem; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>SecretDrop</h1>
+    <div id="form-view">
+      <label for="secret">Secret</label>
+      <textarea id="secret" placeholder="Paste your secret here…" autocomplete="off"></textarea>
+      <label for="ttl">Expires in</label>
+      <select id="ttl">
+        <option value="300">5 minutes</option>
+        <option value="900" selected>15 minutes</option>
+        <option value="3600">1 hour</option>
+      </select>
+      <button id="create" type="button">Create Drop</button>
+      <div id="form-error" class="error hidden"></div>
+    </div>
+    <div id="result-view" class="result hidden">
+      <p>Drop ID — tap to copy</p>
+      <div id="drop-id" class="drop-id"></div>
+      <p id="expires" class="expires"></p>
+      <p class="hint">Share this ID. The secret can be read once, then it’s deleted.</p>
+      <button id="new" type="button">Create another</button>
+    </div>
+  </div>
+
+  <script>
+    const formView = document.getElementById('form-view');
+    const resultView = document.getElementById('result-view');
+    const secretEl = document.getElementById('secret');
+    const ttlEl = document.getElementById('ttl');
+    const createBtn = document.getElementById('create');
+    const formError = document.getElementById('form-error');
+    const dropIdEl = document.getElementById('drop-id');
+    const expiresEl = document.getElementById('expires');
+    const newBtn = document.getElementById('new');
+
+    function showError(msg) {
+      formError.textContent = msg;
+      formError.classList.remove('hidden');
+    }
+    function clearError() {
+      formError.classList.add('hidden');
+    }
+
+    createBtn.addEventListener('click', async () => {
+      clearError();
+      const secret = secretEl.value.trim();
+      if (!secret) {
+        showError('Enter a secret.');
+        return;
+      }
+      createBtn.disabled = true;
+      try {
+        const res = await fetch('/api/drop', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ secret, ttl_seconds: parseInt(ttlEl.value, 10) })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showError(data.error || 'Failed to create drop');
+          return;
+        }
+        dropIdEl.textContent = data.id;
+        expiresEl.textContent = 'Expires: ' + new Date(data.expires_at).toLocaleString();
+        formView.classList.add('hidden');
+        resultView.classList.remove('hidden');
+      } catch (e) {
+        showError('Network error.');
+      } finally {
+        createBtn.disabled = false;
+      }
+    });
+
+    dropIdEl.addEventListener('click', () => {
+      const id = dropIdEl.textContent;
+      if (!id) return;
+      navigator.clipboard.writeText(id).then(() => {
+        const t = dropIdEl.textContent;
+        dropIdEl.textContent = 'Copied!';
+        setTimeout(() => { dropIdEl.textContent = t; }, 1500);
+      });
+    });
+
+    newBtn.addEventListener('click', () => {
+      secretEl.value = '';
+      resultView.classList.add('hidden');
+      formView.classList.remove('hidden');
+    });
+  </script>
+</body>
+</html>
